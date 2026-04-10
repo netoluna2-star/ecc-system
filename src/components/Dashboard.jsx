@@ -4,7 +4,7 @@ import CasalForm from "./CasalForm";
 import Filtros from "./Filtros";
 import Aniversariantes from "./Aniversariantes";
 import CasalItem from "./CasalItem";
-import { dangerButton, sair } from "../styles/styles";
+import { dangerButton, sair, cardStyle, inputStyle, primaryButton } from "../styles/styles";
 
 export default function Dashboard({ session }) {
   const user = session.user;
@@ -64,19 +64,28 @@ export default function Dashboard({ session }) {
 
   // 📥 BUSCAR DADOS
   const fetchCasais = async () => {
-    const { data, error } = await supabase
+    // Criamos a base da query
+    let query = supabase
       .from("casais")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) return alert(error.message);
+    // Se o usuário não for admin, filtramos pelo ID dele
+    if (role !== "admin") {
+      query = query.eq("criado_por", user.id);
+    }
 
+    const { data, error } = await query;
+
+    if (error) return alert(error.message);
     setCasais(data || []);
   };
 
   useEffect(() => {
-    fetchCasais();
-  }, []);
+    if (role) { // Só busca os dados quando soubermos quem é o usuário (admin ou user)
+      fetchCasais();
+    }
+  }, [role]);
 
   const getMes = (data) => {
     if (!data) return null;
@@ -86,27 +95,31 @@ export default function Dashboard({ session }) {
   const salvar = async () => {
     let error;
 
+    // Garantimos que o ID do usuário logado vá para a coluna 'criado_por'
+    const payload = { 
+      ...form, 
+      criado_por: user.id 
+    };
+
     if (editandoId) {
       ({ error } = await supabase
         .from("casais")
-        .update(form)
+        .update(form) // No update não alteramos o criador original
         .eq("id", editandoId));
       setEditandoId(null);
     } else {
-      ({ error } = await supabase.from("casais").insert([form]));
+      // No insert, enviamos o payload com o ID do criador
+      ({ error } = await supabase.from("casais").insert([payload]));
     }
 
     if (error) return alert(error.message);
 
     setForm({
-      nome_dele: "",
-      nome_dela: "",
+      nome_dele: "", nome_dela: "",
       endereco: { rua: "", bairro: "", numero: "", cidade: "", estado: "" },
-      fone_dele: "",
-      fone_dela: "",
+      fone_dele: "", fone_dela: "",
       data_do_casamento: "",
     });
-
     fetchCasais();
   };
 
@@ -169,39 +182,42 @@ export default function Dashboard({ session }) {
   console.log("USER:", user);
 
   return (
-    <div style={{ padding: 80 }}>
-      <p>{user.email} ({role})</p>
-
-      {role === "admin" && (
-        <>
-          <input
-            placeholder="Email do usuário"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ marginRight: 10 }}
-          />
-
-          <select
-            value={roleSelecionada}
-            onChange={(e) => setRoleSelecionada(e.target.value)}
-            style={{ marginRight: 10 }}
-          >
-            <option value="user">Usuário</option>
-            <option value="admin">Admin</option>
-          </select>
-
-          <button onClick={convidarUsuario} style={{ ...dangerButton }}>
-            Convidar usuário
-          </button>
-        </>
-      )}
-
-      <button
-        onClick={() => supabase.auth.signOut()}
-        style={{ ...dangerButton, ...sair }}
-      >
+    <div style={{ 
+    padding: "20px", // Padding menor para mobile
+    maxWidth: "600px", // Centraliza em telas grandes
+    margin: "0 auto" 
+    }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <p style={{ margin: 0 }}>{user.email.split('@')[0]} ({role})</p>
+      <button onClick={() => supabase.auth.signOut()} style={{ ...dangerButton, marginRight: 0 }}>
         Sair
       </button>
+    </div>
+
+    {role === "admin" && (
+      <div style={cardStyle}>
+        <h4>Convidar Usuário</h4>
+        <input 
+          placeholder="Email do usuário" 
+          value={email} 
+          onChange={(e) => setEmail(e.target.value)} 
+          style={inputStyle} 
+        />
+        <select 
+          value={roleSelecionada} 
+          onChange={(e) => setRoleSelecionada(e.target.value)} 
+          style={inputStyle}
+        >
+          <option value="user">Usuário</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button onClick={convidarUsuario} style={primaryButton}>
+          Convidar
+        </button>
+      </div>
+    )}
+
+      
 
       <CasalForm
         form={form}

@@ -61,7 +61,12 @@ export default function Login() {
         backgroundPosition: "center",
       }}
     >
-      <div style={cardStyle}>
+      <div style={{ 
+        ...cardStyle, 
+        maxWidth: "400px", // 👈 Limita a largura no computador
+        width: "90%",      // 👈 Garante uma margem nas laterais em celulares bem pequenos
+        margin: "0 auto"   // 👈 Mantém centralizado
+      }}>
         <h2>ECC Paróquia Santo Antônio💙</h2>
         <h2>Solânea - PB💙</h2>
 

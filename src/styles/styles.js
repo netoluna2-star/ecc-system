@@ -6,13 +6,20 @@ export const centerStyle = {
   background: "#f4f6f8"
 };
 
+const resetBoxSizing = {
+  boxSizing: "border-box", // 👈 ESTE É O PULOS DO GATO PARA MOBILE
+  width: "100%", // Garante que tudo ocupe 100% por padrão
+  maxWidth: "100%", // Evita que cresça além do container
+};
+
 export const inputStyle = {
-  width: "100%",
-  padding: 8,
+  ...resetBoxSizing, // Aplica o reset e width
+  padding: 12, // Aumentado um pouco para facilitar o toque no mobile
   marginBottom: 10,
   borderRadius: 6,
   border: "1px solid #ccc",
-  fontSize: 14
+  fontSize: 16, // Aumentado de 14 para 16 (melhor para acessibilidade mobile)
+  background: "#fdfdfd", // Uma cor de fundo leve para o input
 };
 
 export const sair = {
@@ -23,14 +30,21 @@ export const sair = {
 };
 
 export const primaryButton = {
-  padding: 10,
+  ...resetBoxSizing, // Aplica o reset e width
+  padding: 12, // Aumentado para facilitar o toque no mobile
   background: "#4f46e5",
   color: "#fff",
   border: "none",
   borderRadius: 6,
-  marginRight: "10px",
   cursor: "pointer",
-  marginTop: 5
+  marginTop: 10,
+  fontSize: "16px",
+};
+
+export const inlineButton = {
+  ...primaryButton,
+  width: "auto",
+  marginRight: "10px"
 };
 
 export const secondaryButton = {
@@ -44,6 +58,8 @@ export const secondaryButton = {
 };
 
 export const dangerButton = {
+  ...resetBoxSizing, // Aplica o reset e width (opcional, mas bom para garantir)
+  width: "auto", // Sobrescreve para botão "Sair" ficar pequeno
   padding: 8,
   background: "#ef4444",
   color: "#fff",
@@ -55,11 +71,19 @@ export const dangerButton = {
 
 export const cardStyle = {
   background: "#fff",
-  padding: 20,
-  borderRadius: 10,
-  boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-  backdropFilter: "blur(8px)", // 👈 efeito vidro
-  marginBottom: 20
+  padding: "15px", // Reduzido levemente
+  borderRadius: "10px",
+  boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+  marginBottom: "15px",
+  width: "100%", // Garante que ocupe a largura total disponível
+  boxSizing: "border-box"
+};
+
+export const dashboardContainer = {
+  padding: "20px", // Reduzido de 80 para 20
+  maxWidth: "800px", // Limita a largura em telas grandes
+  margin: "0 auto", // Centraliza o conteúdo
+  boxSizing: "border-box"
 };
 
 export const recolhe = {
@@ -77,3 +101,4 @@ export const login = {
   height: "100%",
   background: "rgba(233, 230, 230, 0.3)"
 }
+
