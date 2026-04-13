@@ -13,13 +13,17 @@ const resetBoxSizing = {
 };
 
 export const inputStyle = {
-  ...resetBoxSizing, // Aplica o reset e width
-  padding: 12, // Aumentado um pouco para facilitar o toque no mobile
-  marginBottom: 10,
-  borderRadius: 6,
+  width: "100%",
+  padding: "10px 12px", // Aumentar o padding ajuda a centralizar
+  marginBottom: "10px",
+  borderRadius: "8px",
   border: "1px solid #ccc",
-  fontSize: 16, // Aumentado de 14 para 16 (melhor para acessibilidade mobile)
-  background: "#fdfdfd", // Uma cor de fundo leve para o input
+  fontSize: "16px",
+  // Ajustes vitais abaixo:
+  height: "45px",        // Altura fixa confortável
+  lineHeight: "1.5",    // Garante espaço entre as linhas do texto
+  display: "block",
+  boxSizing: "border-box" // Garante que o padding não aumente a largura total
 };
 
 export const sair = {
@@ -101,4 +105,6 @@ export const login = {
   height: "100%",
   background: "rgba(233, 230, 230, 0.3)"
 }
+
+
 

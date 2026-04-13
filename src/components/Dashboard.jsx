@@ -4,7 +4,7 @@ import CasalForm from "./CasalForm";
 import Filtros from "./Filtros";
 import Aniversariantes from "./Aniversariantes";
 import CasalItem from "./CasalItem";
-import { dangerButton, sair, cardStyle, inputStyle, primaryButton } from "../styles/styles";
+import { dangerButton, cardStyle, inputStyle, primaryButton, secondaryButton } from "../styles/styles";
 
 export default function Dashboard({ session }) {
   const user = session.user;
@@ -17,6 +17,7 @@ export default function Dashboard({ session }) {
   const [email, setEmail] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [roleSelecionada, setRoleSelecionada] = useState("user");
+  const [salvando, setSalvando] = useState(false);
 
   const [form, setForm] = useState({
     nome_dele: "",
@@ -30,7 +31,6 @@ export default function Dashboard({ session }) {
   // 🔐 VALIDAÇÃO DE ACESSO
   useEffect(() => {
     if (!user) return;
-
     const initUser = async () => {
       const { data } = await supabase
         .from("usuarios")
@@ -43,207 +43,167 @@ export default function Dashboard({ session }) {
         await supabase.auth.signOut();
         return;
       }
-
-      if (!data.auth_id) {
-        const { error } = await supabase
-          .from("usuarios")
-          .update({ auth_id: user.id })
-          .eq("email", user.email);
-
-        console.log("UPDATE ERROR:", error);
-      }
-
-      /*Estou construindo um sistema com React + Supabase, já tenho login, RLS e controle de usuários. Quero continuar daqui."*/
-
       setRole(data.role);
       setCheckingAccess(false);
     };
-
     initUser();
   }, [user]);
 
-  // 📥 BUSCAR DADOS
+  // 📥 BUSCAR TODOS OS DADOS (Sem limite de página)
   const fetchCasais = async () => {
-    // Criamos a base da query
     let query = supabase
       .from("casais")
       .select("*")
       .order("created_at", { ascending: false });
 
-    // Se o usuário não for admin, filtramos pelo ID dele
     if (role !== "admin") {
       query = query.eq("criado_por", user.id);
     }
 
     const { data, error } = await query;
-
     if (error) return alert(error.message);
     setCasais(data || []);
   };
 
   useEffect(() => {
-    if (role) { // Só busca os dados quando soubermos quem é o usuário (admin ou user)
-      fetchCasais();
-    }
+    if (role) fetchCasais();
   }, [role]);
 
+  // 🔍 LÓGICA DE FILTRO (Local e Estável)
   const getMes = (data) => {
     if (!data) return null;
-    return Number(data.split("T")[0].split("-")[1]);
+    return Number(data.split("-")[1]);
   };
 
+  const casaisFiltrados = casais.filter((c) => {
+    const termo = busca.toLowerCase();
+    const bateNome = !termo || c.nome_dele?.toLowerCase().includes(termo) || c.nome_dela?.toLowerCase().includes(termo);
+    const bateMes = !mesFiltro || getMes(c.data_do_casamento) === Number(mesFiltro);
+    return bateNome && bateMes;
+  });
+
+  // 💾 FUNÇÕES DE AÇÃO (Salvar, Editar, Deletar...)
   const salvar = async () => {
-    let error;
-
-    // Garantimos que o ID do usuário logado vá para a coluna 'criado_por'
-    const payload = { 
-      ...form, 
-      criado_por: user.id 
-    };
-
-    if (editandoId) {
-      ({ error } = await supabase
-        .from("casais")
-        .update(form) // No update não alteramos o criador original
-        .eq("id", editandoId));
-      setEditandoId(null);
-    } else {
-      // No insert, enviamos o payload com o ID do criador
-      ({ error } = await supabase.from("casais").insert([payload]));
+    if (!form.nome_dele || !form.nome_dela) {
+      return alert("Por favor, preencha os nomes do casal.");
     }
 
-    if (error) return alert(error.message);
+    setSalvando(true);
 
-    setForm({
-      nome_dele: "", nome_dela: "",
-      endereco: { rua: "", bairro: "", numero: "", cidade: "", estado: "" },
-      fone_dele: "", fone_dela: "",
-      data_do_casamento: "",
-    });
-    fetchCasais();
+    // 1. TRAVA DE DUPLICIDADE (Lógica Original)
+    if (!editandoId) {
+      const fone1 = form.fone_dele?.trim();
+      const fone2 = form.fone_dela?.trim();
+      const telefones = [fone1, fone2].filter(f => f && f.length > 5);
+
+      if (telefones.length > 0) {
+        // Esta sintaxe com aspas duplas "${f}" é a que o Supabase 
+        // entende melhor para campos de texto com caracteres especiais
+        const filtros = telefones
+          .map(f => `fone_dele.eq."${f}",fone_dela.eq."${f}"`)
+          .join(",");
+
+        const { data: existente } = await supabase
+          .from("casais")
+          .select("id, nome_dele, nome_dela")
+          .or(filtros)
+          .maybeSingle();
+
+        if (existente) {
+          setSalvando(false);
+          return alert(`⚠️ Telefone já cadastrado: ${existente.nome_dele} & ${existente.nome_dela}`);
+        }
+      }
+    }
+
+    // 2. SALVAMENTO
+    try {
+      const payload = { ...form, criado_por: user.id };
+      let error;
+
+      if (editandoId) {
+        // Na edição, passamos o form direto
+        ({ error } = await supabase.from("casais").update(form).eq("id", editandoId));
+      } else {
+        // No insert, passamos o payload com o ID do criador
+        ({ error } = await supabase.from("casais").insert([payload]));
+      }
+
+      if (error) throw error;
+
+      // LIMPEZA TOTAL
+      setForm({
+        nome_dele: "", nome_dela: "",
+        endereco: { rua: "", bairro: "", numero: "", cidade: "", estado: "" },
+        fone_dele: "", fone_dela: "",
+        data_do_casamento: "",
+      });
+      setEditandoId(null);
+      fetchCasais();
+      alert("Sucesso!");
+    } catch (err) {
+      alert("Erro: " + err.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   const deletar = async (id) => {
-    const { error } = await supabase.from("casais").delete().eq("id", id);
-    if (error) return alert(error.message);
-    fetchCasais();
+    if (window.confirm("Deseja realmente excluir?")) {
+      await supabase.from("casais").delete().eq("id", id);
+      fetchCasais();
+    }
   };
 
   const editar = (c) => {
     setForm(c);
     setEditandoId(c.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const casaisFiltrados = casais.filter((c) => {
-    const termo = busca.toLowerCase();
-
-    return (
-      (!termo ||
-        c.nome_dele?.toLowerCase().includes(termo) ||
-        c.nome_dela?.toLowerCase().includes(termo)) &&
-      (!mesFiltro ||
-        getMes(c.data_do_casamento) === Number(mesFiltro))
-    );
-  });
-
-  // 👤 CONVIDAR USUÁRIO
   const convidarUsuario = async () => {
     if (!email) return alert("Informe um email");
-
-    const { data: existente } = await supabase
-      .from("usuarios")
-      .select("email")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (existente) {
-      return alert("Usuário já cadastrado");
-    }
-
-    const { error } = await supabase.from("usuarios").insert([
-      {
-        email,
-        role: roleSelecionada,
-        ativo: true,
-      },
-    ]);
-
+    const { error } = await supabase.from("usuarios").insert([{ email, role: roleSelecionada, ativo: true }]);
     if (error) return alert(error.message);
-
-    alert(`✅ ${email} autorizado!`);
+    alert("Autorizado!");
     setEmail("");
-    setRoleSelecionada("user");
   };
 
-  if (checkingAccess) {
-    return <div style={{ padding: 20 }}>Validando acesso...</div>;
-  }
-
-  console.log("USER:", user);
+  if (checkingAccess) return <div style={{ padding: 20 }}>Validando acesso...</div>;
 
   return (
-    <div style={{ 
-    padding: "20px", // Padding menor para mobile
-    maxWidth: "600px", // Centraliza em telas grandes
-    margin: "0 auto" 
-    }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-      <p style={{ margin: 0 }}>{user.email.split('@')[0]} ({role})</p>
-      <button onClick={() => supabase.auth.signOut()} style={{ ...dangerButton, marginRight: 0 }}>
-        Sair
-      </button>
-    </div>
-
-    {role === "admin" && (
-      <div style={cardStyle}>
-        <h4>Convidar Usuário</h4>
-        <input 
-          placeholder="Email do usuário" 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          style={inputStyle} 
-        />
-        <select 
-          value={roleSelecionada} 
-          onChange={(e) => setRoleSelecionada(e.target.value)} 
-          style={inputStyle}
-        >
-          <option value="user">Usuário</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button onClick={convidarUsuario} style={primaryButton}>
-          Convidar
-        </button>
+    <div style={{ padding: "20px", maxWidth: "600px", margin: "0 auto" }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <p>{user.email.split('@')[0]} ({role})</p>
+        <button onClick={() => supabase.auth.signOut()} style={dangerButton}>Sair</button>
       </div>
-    )}
 
+      {role === "admin" && (
+        <div style={cardStyle}>
+          <h4>Convidar Usuário</h4>
+          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+          <select value={roleSelecionada} onChange={(e) => setRoleSelecionada(e.target.value)} style={inputStyle}>
+            <option value="user">Usuário</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button onClick={convidarUsuario} style={primaryButton}>Convidar</button>
+        </div>
+      )}
+
+      <CasalForm form={form} setForm={setForm} salvar={salvar} editandoId={editandoId} salvando={salvando} />
       
-
-      <CasalForm
-        form={form}
-        setForm={setForm}
-        salvar={salvar}
-        editandoId={editandoId}
-      />
-
-      <Filtros
-        busca={busca}
-        setBusca={setBusca}
-        mesFiltro={mesFiltro}
-        setMesFiltro={setMesFiltro}
-      />
+      <Filtros busca={busca} setBusca={setBusca} mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} />
 
       <Aniversariantes casais={casais} />
 
+      {/* LISTA FILTRADA */}
       {casaisFiltrados.map((c) => (
-        <CasalItem
-          key={c.id}
-          c={c}
-          editar={editar}
-          deletar={deletar}
-          role={role}
-        />
+        <CasalItem key={c.id} c={c} editar={editar} deletar={deletar} role={role} />
       ))}
+
+      <p style={{ textAlign: 'center', color: '#666', marginTop: 20 }}>
+        Total: {casaisFiltrados.length} casais encontrados
+      </p>
     </div>
   );
 }
